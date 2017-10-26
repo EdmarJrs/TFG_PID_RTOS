@@ -1,4 +1,37 @@
 
+
+#General build artifacts
+*.mk
+*.o
+*.a
+*.elf
+*.hex
+*.axf
+*.d
+*.lst
+*.map
+*.plg
+*.lnp
+*.crf
+*.tra
+*.sct
+*.bak
+*.dep
+
+#MDK-ARM
+*.__i
+*.htm
+*.uvgui.*
+*.uvopt
+*.axf
+
+#Eclipse
+.metadata
+
+
+
+
+
 # Created by https://www.gitignore.io/api/c,eclipse,windows
 
 */.metadata/
