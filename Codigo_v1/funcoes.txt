@@ -1,0 +1,272 @@
+#include "board.h"
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "task.h"
+#include "gpio.h"
+#include "oled.h"
+#include "acc.h"
+#include "i2c.h"
+#include "ssp.h"
+#include "uart.h"
+#include "timer16.h"
+#include "adc.h"
+
+xQueueHandle fila_msg;
+static uint8_t buf[30];
+double kp,ki,kd,T,sp;
+int32_t u0,u1,u2,y0,y1,y2;
+uint32_t ValorADC;
+
+
+/* Sets up system hardware */
+static void prvSetupHardware(void) {
+	SystemCoreClockUpdate();
+	Board_Init();
+}
+//converte um numero int numa string
+static void intToString(int value, uint8_t* pBuf, uint32_t len, uint32_t base)
+{
+    static const char* pAscii = "0123456789abcdefghijklmnopqrstuvwxyz";
+    int pos = 0;
+    int tmpValue = value;
+    // the buffer must not be null and at least have a length of 2 to handle one
+    // digit and null-terminator
+    if (pBuf == NULL || len < 2)
+    {
+        return;
+    }
+    // a valid base cannot be less than 2 or larger than 36
+    // a base value of 2 means binary representation. A value of 1 would mean only zeros
+    // a base larger than 36 can only be used if a larger alphabet were used.
+    if (base < 2 || base > 36)
+    {
+        return;
+    }
+    // negative value
+    if (value < 0)
+    {
+        tmpValue = -tmpValue;
+        value    = -value;
+        pBuf[pos++] = '-';
+    }
+    // calculate the required length of the buffer
+    do {
+        pos++;
+        tmpValue /= base;
+    } while(tmpValue > 0);
+    if (pos > len)
+    {
+        // the len parameter is invalid.
+        return;
+    }
+    pBuf[pos] = '\0';
+    do {
+        pBuf[--pos] = pAscii[value % base];
+        value /= base;
+    } while(value > 0);
+
+    return;
+}
+
+static void floatToString(float value, uint8_t* pBuf, uint32_t len, uint32_t base)
+{
+    static const char* pAscii = "0123456789abcdefghijklmnopqrstuvwxyz";
+    int pos = 0;
+    int tmpValue = (int)value;
+    float decimais = value - tmpValue;
+    int tmpDecValue = (int)(10000*decimais);
+
+    intToString(tmpValue, pBuf, 10, 10);
+
+    while(pBuf[pos]!='\0')
+    {
+    	pos++;
+    }
+    pBuf[pos] = '.';
+
+    /*do {
+            pos++;
+            tmpDecValue /= base;
+    } while(tmpDecValue > 0);
+    */
+    for(int i=0;i<4;i++)//
+    {
+    	pos++;
+    	pBuf[pos]= pAscii[0];
+    }
+    pos++;
+    pBuf[pos] = '\0';
+    //tmpDecValue = (int)(1000*decimais);
+
+    do {
+    	pBuf[--pos] = pAscii[tmpDecValue % base];
+    	tmpDecValue /= base;
+    	tmpDecValue=(int)tmpDecValue;
+    } while(tmpDecValue > 0);
+    //UARTSend(pBuf, 10);
+    return;
+}
+
+void Task_LCD(void *pvParameters)
+{	oled_clearScreen(OLED_COLOR_WHITE);
+	oled_putString(1, 1, (uint8_t*) " KP=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+	oled_putString(1, 9, (uint8_t*) " KI=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+	oled_putString(1, 17, (uint8_t*) " KD=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+	oled_putString(1, 25, (uint8_t*) " SP=  ", OLED_COLOR_BLACK,OLED_COLOR_WHITE);
+	oled_putString(1, 33, (uint8_t*) " T=  ", OLED_COLOR_BLACK,OLED_COLOR_WHITE);
+	for(;;)
+	{
+		    //kp = ADCRead(0);
+			floatToString(kp, buf, 30, 10);
+			oled_fillRect((1+9*3),1, (1+9*10), 9, OLED_COLOR_WHITE);
+			oled_putString((1+9*3),1, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+
+			floatToString(ki, buf, 30, 10);
+			oled_fillRect((1+9*3),9, (1+9*10), 17, OLED_COLOR_WHITE);
+			oled_putString((1+9*3),9, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+
+			floatToString(kd, buf, 30, 10);
+			oled_fillRect((1+9*3),17, (1+9*10), 25, OLED_COLOR_WHITE);
+			oled_putString((1+9*3),17, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+
+			floatToString(sp, buf, 30, 10);
+			oled_fillRect((1+9*3),25, (1+9*10), 33, OLED_COLOR_WHITE);
+			oled_putString((1+9*3),25, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+
+			floatToString(T, buf, 30, 10);
+			oled_fillRect((1+9*3),33, (1+9*10), 41, OLED_COLOR_WHITE);
+			oled_putString((1+9*3),33, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+
+			vTaskDelay(1000);
+	}
+}
+
+void Task_GET_Uart(void *pvParameters)
+{	double valor=0;
+	uint8_t estado=0;
+	bool tipo=TRUE;
+	double cont=0.1;
+	uint8_t data=0;
+	double kp_aux,ki_aux,kd_aux,T_aux,sp_aux;
+	bool status=FALSE;
+	for(;;)
+	{
+		data=0;
+		if(UARTReceive(&data, 1, FALSE))
+		{
+		switch(data)
+		 {
+		case 0x2A: estado=1;status=FALSE;
+			 break;
+		case 0x50: if(estado==1){estado=2; tipo=TRUE;valor=0.0;}
+		     break;
+		case 0x49: if(estado==2){estado=3; tipo=TRUE; kp_aux=valor; valor=0.0;}
+			 break;
+		case 0x44: if(estado==3){estado=4; tipo=TRUE; ki_aux=valor; valor=0.0;}
+			 break;
+		case 0x53: if(estado==4){estado=5;tipo=TRUE; kd_aux=valor; valor=0.0;}
+			 break;
+		case 0x54: if(estado==5){estado=6; tipo=TRUE; sp_aux=valor; valor=0.0;}
+			 break;
+		case 0x2E: tipo=FALSE;cont=0.1;
+			break;
+		case 0x23: if(estado==6){estado=0; T_aux=valor; valor=0.0;status=TRUE;}
+			break;
+		default:
+			if((data==48)||(data==49)||(data==50)||(data==51)||(data==52)||(data==53)||(data==54)||(data==55)||(data==56)||(data==57))
+			{
+				if((tipo==TRUE)&& (estado!=0)&& (estado!=1))
+				{
+				valor=valor*10+(data-48);
+				}
+				else
+				{
+					if((tipo==FALSE)&& (estado!=0) &&(estado!=1))
+					{
+						valor=valor+ cont*(data-48);
+						cont=cont*0.1;
+					}
+					else
+					{
+						estado=0;
+					}
+				}
+			}
+			else
+			{
+				estado=0;
+			}
+		 }
+		}
+
+		if(status==TRUE)
+		{ status=FALSE;
+			kp=kp_aux;
+			ki=ki_aux;
+			kd=kd_aux;
+			sp=sp_aux;
+			T=T_aux;
+		}
+		vTaskDelay(1);
+	}
+}
+void Task_GET_ADC(void *pvParameters)
+{
+	 ValorADC= ADCRead(0);//PIO 0_11 PIO 0.11
+	vTaskDelay(T*1000);
+}
+void Task_SEND_PWM(void *pvParameters)
+{
+
+	if(ValorADC==0)
+	{
+		ValorADC=100;
+	}
+	setMatch_timer16PWM (1, 1, ValorADC); // PIO 1.10
+	vTaskDelay(T*1000);
+}
+int main(void)
+{
+	prvSetupHardware();
+
+//UART
+	UARTInit(9600);
+
+//PWM
+
+	 uint32_t period = 1024;
+	 init_timer16PWM(1, period, MATCH1,0);
+     setMatch_timer16PWM (1, 1, period/2); // PIO 1.10
+     enable_timer16(1);
+
+//ADC
+	ADCInit( ADC_CLK );//PIO 0.11
+
+//LCD
+/*
+	 	SSP_IOConfig(0);
+	 	SSP_Init(0);
+	 	oled_init();
+*/
+	kp=123.456;
+	ki=546.786;
+	kd=234.09;
+	sp=234.87;
+	T=0.01;
+/*	xTaskCreate(Task_LCD, (signed char * ) "Task_LCD", configMINIMAL_STACK_SIZE+50,
+			NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
+*/
+	xTaskCreate(Task_GET_Uart, (signed char * ) "GET_Uart", configMINIMAL_STACK_SIZE+50,
+			NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
+
+	xTaskCreate(Task_GET_ADC, (signed char * ) "Task_GET_ADC", configMINIMAL_STACK_SIZE+50,
+				NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
+	xTaskCreate(Task_SEND_PWM, (signed char * ) "Task_SEND_PWM", configMINIMAL_STACK_SIZE+50,
+					NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
+	// Start the scheduler
+	vTaskStartScheduler();
+
+while(1)
+{}
+
+}
