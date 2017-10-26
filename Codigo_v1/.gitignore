@@ -1,16 +1,14 @@
-
-RTOSDemo/Debug/Source/FreeRTOS_Source/subdir.mk
-RTOSDemo/Debug/RTOSDemo_Debug_memory.ld
-Lib_MCU/Debug/src/subdir.mk
-RTOSDemo/Debug/Source/subdir.mk
-RTOSDemo/Debug/Source/Common_Demo_Tasks/subdir.mk
-RTOSDemo/Debug/RTOSDemo.axf
-RTOSDemo/Debug/makefile
-RTOSDemo/Debug/Source/FreeRTOS_Source/portable/GCC/ARM_CM0/subdir.mk
-RTOSDemo/Debug/RTOSDemo_Debug.ld
-RTOSDemo/Debug/Source/FreeRTOS_Source/portable/MemMang/subdir.mk
-RTOSDemo/Debug/RTOSDemo_Debug_library.ld
-
+Codigo_v1/RTOSDemo/Debug/Source/FreeRTOS_Source/subdir.mk
+Codigo_v1/RTOSDemo/Debug/RTOSDemo_Debug_memory.ld
+Codigo_v1/Lib_MCU/Debug/src/subdir.mk
+Codigo_v1/RTOSDemo/Debug/Source/subdir.mk
+Codigo_v1/RTOSDemo/Debug/Source/Common_Demo_Tasks/subdir.mk
+Codigo_v1/RTOSDemo/Debug/RTOSDemo.axf
+Codigo_v1/RTOSDemo/Debug/makefile
+Codigo_v1/RTOSDemo/Debug/Source/FreeRTOS_Source/portable/GCC/ARM_CM0/subdir.mk
+Codigo_v1/RTOSDemo/Debug/RTOSDemo_Debug.ld
+Codigo_v1/RTOSDemo/Debug/Source/FreeRTOS_Source/portable/MemMang/subdir.mk
+Codigo_v1/RTOSDemo/Debug/RTOSDemo_Debug_library.ld
 
 
 
