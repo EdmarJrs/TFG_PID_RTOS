@@ -14,9 +14,6 @@ Codigo_v1/RTOSDemo/Debug/RTOSDemo_Debug_library.ld
 
 
 
-
-
-
 #General build artifacts
 *.mk
 *.o
