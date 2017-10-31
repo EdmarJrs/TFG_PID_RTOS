@@ -21,46 +21,15 @@
 uint16_t ADC0_Value = 0;
 uint16_t ADC1_Value = 0;
 uint8_t pBuf[50];
-float kp = 10; //Proportional constant of PID
-float ki = 10; //Integral constant of PID
+//static uint8_t buf[30];
+float kp = 0; //Proportional constant of PID
+float ki = 0; //Integral constant of PID
 float kd = 0; //Derivative constant of PID
 float sp = 0; //Setpoint
 float T = 0;  //Amostrage Time
-/*
- void Task_LCD(void *pvParameters)
- {	oled_clearScreen(OLED_COLOR_WHITE);
- oled_putString(1, 1, (uint8_t*) " KP=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
- oled_putString(1, 9, (uint8_t*) " KI=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
- oled_putString(1, 17, (uint8_t*) " KD=  ", OLED_COLOR_BLACK, OLED_COLOR_WHITE);
- oled_putString(1, 25, (uint8_t*) " SP=  ", OLED_COLOR_BLACK,OLED_COLOR_WHITE);
- oled_putString(1, 33, (uint8_t*) " T=  ", OLED_COLOR_BLACK,OLED_COLOR_WHITE);
- for(;;)
- {
- //kp = ADCRead(0);
- floatToString(kp, buf, 30, 10);
- oled_fillRect((1+9*3),1, (1+9*10), 9, OLED_COLOR_WHITE);
- oled_putString((1+9*3),1, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
 
- floatToString(ki, buf, 30, 10);
- oled_fillRect((1+9*3),9, (1+9*10), 17, OLED_COLOR_WHITE);
- oled_putString((1+9*3),9, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
+int count=0;
 
- floatToString(kd, buf, 30, 10);
- oled_fillRect((1+9*3),17, (1+9*10), 25, OLED_COLOR_WHITE);
- oled_putString((1+9*3),17, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
-
- floatToString(sp, buf, 30, 10);
- oled_fillRect((1+9*3),25, (1+9*10), 33, OLED_COLOR_WHITE);
- oled_putString((1+9*3),25, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
-
- floatToString(T, buf, 30, 10);
- oled_fillRect((1+9*3),33, (1+9*10), 41, OLED_COLOR_WHITE);
- oled_putString((1+9*3),33, buf, OLED_COLOR_BLACK, OLED_COLOR_WHITE);
-
- vTaskDelay(1000);
- }
- }
- */
 void Task_GET_Uart(void *pvParameters) {
 	(void) pvParameters;
 	float valor = 0;
@@ -161,28 +130,46 @@ void Task_GET_Uart(void *pvParameters) {
 	}
 }
 
-void Task_GET_ADC(void *pvParameters) {
+void Task_PID(void *pvParameters) {
 	(void) pvParameters;
-	for (;;) {
-		ADC0_Value = 0;
-		ADC1_Value = 0;
-		ADC0_Value = ADCRead(0);   //AD0  //11 clocks to read
-		ADC1_Value = ADCRead(1);  //AD1
-		vTaskDelay(1000);  //Get ADC in all amostrage time
-	}
-}
-void Task_SEND_PWM(void *pvParameters) {
-	(void) pvParameters;
-	for (;;) {
-		ADC0_Value = 0;
-		ADC1_Value = 0;
-		ADC0_Value = ADCRead(0);   //AD0  //11 clocks to read
-		ADC1_Value = ADCRead(1);  //AD1
 
-		//Has been used ADC Value for PWM, for while
-		setMatch_timer16PWM(0, 1, 1024 - ADC0_Value);  //Set offset PWM0
-		setMatch_timer16PWM(1, 1, 1024 - ADC1_Value);  //Set offset PWM1
-		vTaskDelay(1000);  //Set PWM in all amostrage time
+	float E[3];
+	for(int i=0;i<3;i++)
+	{E[i]=0;}
+
+	float U[2];
+	for(int i=0;i<2;i++)
+	{U[i]=0;}
+
+	kp=ki=kd=1;
+	T=0.01;
+	sp=800;
+
+	for (;;) {
+
+		ADC0_Value = ADCRead(0); //AD0  //11 clocks to read
+		//ADC1_Value = ADCRead(1);  //AD1
+		E[0]= sp-ADC0_Value;// Actual Error
+
+		U[0]=U[1]+E[0]*(kp+kd)+E[1]*(ki*T-kp-2*kd)+E[2]*kd; //PID discrete equation
+
+		//Controller limits
+		if(U[0]>1024)
+		{
+			U[0]=1024;
+		}
+		if(U[0]<0)
+		{
+			U[0]=0;
+		}
+		setMatch_timer16PWM(0, 1, 1024 - U[0]);  //Set offset PWM0
+		//setMatch_timer16PWM(1, 1, 1024 - ADC1_Value);  //Set offset PWM1
+
+		E[2]= E[1];
+		E[1]= E[0];
+		U[1]=U[0];
+
+		vTaskDelay(1000*T); //Amostrage time
 	}
 }
 
@@ -212,26 +199,13 @@ void main_TFG() {
 	//PIO0_19  -TX
 	UARTInit(9600);
 
-	//Task Configurations
-	/*xTaskCreate(Task_LCD, (signed char * ) "Task_LCD", configMINIMAL_STACK_SIZE+50,
-	 NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);*/
-
-	//test
-
-	T = 0.01;
-	//end test
 	//Task for UART
 	xTaskCreate(Task_GET_Uart, (signed char *) "GET_Uart",
 			configMINIMAL_STACK_SIZE,
 			NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
 
-	//Task for ADC
-	xTaskCreate(Task_GET_ADC, (signed char *) "Task_GET_ADC",
-			configMINIMAL_STACK_SIZE,
-			NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
-
-	//Task for PWM
-	xTaskCreate(Task_SEND_PWM, (signed char *) "Task_SEND_PWM",
+	//Task for PID
+	xTaskCreate(Task_PID, (signed char *) "Task_PID",
 			configMINIMAL_STACK_SIZE,
 			NULL, (tskIDLE_PRIORITY + 1UL), (xTaskHandle *) NULL);
 
