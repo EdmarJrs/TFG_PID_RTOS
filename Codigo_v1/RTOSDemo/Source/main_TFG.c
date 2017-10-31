@@ -21,8 +21,8 @@
 uint16_t ADC0_Value = 0;
 uint16_t ADC1_Value = 0;
 uint8_t pBuf[50];
-float kp = 0; //Proportional constant of PID
-float ki = 0; //Integral constant of PID
+float kp = 10; //Proportional constant of PID
+float ki = 10; //Integral constant of PID
 float kd = 0; //Derivative constant of PID
 float sp = 0; //Setpoint
 float T = 0;  //Amostrage Time
